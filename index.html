@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sorteador Dark Pro - Animação</title>
+    <title>Sorteador</title>
     <style>
         :root {
             --bg-body: #0f172a;
@@ -62,7 +62,6 @@
             outline: none;
         }
 
-        /* Setas customizadas com a cor do tema */
         input[type=number]::-webkit-inner-spin-button {
             opacity: 1;
             filter: hue-rotate(150deg) brightness(1.5);
@@ -71,7 +70,6 @@
 
         textarea { height: 50px; margin-bottom: 1.5rem; resize: none; }
 
-        /* Destaque do Número Principal */
         #resultado {
             font-size: 6.5rem;
             font-weight: 900;
@@ -85,7 +83,6 @@
             align-items: center;
         }
 
-        /* Classe de animação quando o número final cai */
         .vitoria {
             animation: pop-glow 0.5s ease-out;
             text-shadow: 0 0 40px rgba(34, 197, 94, 0.8) !important;
@@ -159,8 +156,30 @@
 
 <script>
     let sorteados = [];
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Função para gerar sons sintéticos
+    function playSound(freq, type, duration, vol) {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        
+        gainNode.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + duration);
+    }
 
     function iniciarSorteio() {
+        // Ativar contexto de áudio (necessário para navegadores modernos)
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
         const min = Math.ceil(parseInt(document.getElementById('min').value));
         const max = Math.floor(parseInt(document.getElementById('max').value));
         const banidosInput = document.getElementById('banidos').value;
@@ -169,49 +188,56 @@
 
         const banidos = banidosInput.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
 
-        // Validações
-        if (min >= max) { alert("Mínimo deve ser menor que o máximo!"); return; }
+        if (min >= max) { alert("Intervalo inválido!"); return; }
         
         const totalNoIntervalo = max - min + 1;
         const banidosNoIntervalo = banidos.filter(n => n >= min && n <= max);
         const setUnico = new Set([...sorteados, ...banidosNoIntervalo]);
 
         if (setUnico.size >= totalNoIntervalo) {
-            alert("Todos os números possíveis já foram usados!");
+            alert("Números esgotados!");
             return;
         }
 
-        // Desativar botão durante a animação
         btn.disabled = true;
         display.classList.remove('vitoria');
 
-        // Lógica do número final (já escolhido antes da animação)
         let numeroFinal;
         do {
             numeroFinal = Math.floor(Math.random() * (max - min + 1)) + min;
         } while (sorteados.includes(numeroFinal) || banidos.includes(numeroFinal));
 
-        // --- ANIMAÇÃO DE SHUFFLE ---
-        let duracao = 1500; // 1.5 segundos de giro
-        let intervaloCorrendo = 50; // velocidade das trocas
+        let duracao = 2000; 
+        let intervaloCorrendo = 80; 
         let tempoDecorrido = 0;
 
         const shuffle = setInterval(() => {
-            // Mostra números aleatórios do intervalo durante o giro
             const numFake = Math.floor(Math.random() * (max - min + 1)) + min;
             display.innerText = numFake;
+            
+            // Som de "tick" a cada troca de número
+            playSound(440, 'square', 0.05, 0.1); 
+
             tempoDecorrido += intervaloCorrendo;
 
-            if (tempoDecorrido >= duracao) {
+            // Aumenta o tempo do intervalo para simular desaceleração
+            if(tempoDecorrido > duracao * 0.7) {
                 clearInterval(shuffle);
-                finalizar(numeroFinal);
+                // Inicia uma desaceleração final manual
+                setTimeout(() => finalizar(numeroFinal), 300);
             }
         }, intervaloCorrendo);
 
         function finalizar(num) {
             sorteados.push(num);
             display.innerText = num;
-            display.classList.add('vitoria'); // Efeito de brilho final
+            display.classList.add('vitoria');
+            
+            // Som de Vitória (Acorde)
+            playSound(523.25, 'sine', 0.5, 0.2); // C5
+            setTimeout(() => playSound(659.25, 'sine', 0.5, 0.2), 100); // E5
+            setTimeout(() => playSound(783.99, 'sine', 0.8, 0.3), 200); // G5
+
             document.getElementById('lista-sorteados').innerText = sorteados.join(', ');
             btn.disabled = false;
         }
