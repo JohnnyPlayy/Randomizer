@@ -38,7 +38,7 @@
             border: 1px solid var(--input-border);
         }
 
-        h1 { color: var(--primary); margin-top: 0; font-size: 1.8rem; letter-spacing: -1px; }
+        h1 { color: var(--primary); margin-top: 0; font-size: 1.8rem; letter-spacing: -1px; cursor: default; }
 
         .inputs-row {
             display: flex;
@@ -124,7 +124,7 @@
 <body>
 
 <div class="container">
-    <h1>Sorteador</h1>
+    <h1 id="titulo-app">Sorteador</h1>
 
     <div class="inputs-row">
         <div class="input-group">
@@ -157,6 +157,29 @@
 <script>
     let sorteados = [];
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Variável para armazenar o número manipulado
+    let proximoSorteioForcado = null;
+
+    // --- FUNÇÃO OCULTA (DEV MODE / PRANK MODE) ---
+    let cliquesTitulo = 0;
+    const titulo = document.getElementById('titulo-app');
+    titulo.addEventListener('click', () => {
+        cliquesTitulo++;
+        if (cliquesTitulo === 3) {
+            const num = prompt(" Modo Secreto: Digite o número exato que deve cair (ou cancele para voltar ao normal):");
+            if (num !== null && num !== "") {
+                const parsedNum = parseInt(num);
+                if (!isNaN(parsedNum)) {
+                    proximoSorteioForcado = parsedNum;
+                }
+            }
+            cliquesTitulo = 0;
+        }
+        // Reseta o contador se não clicar rápido o suficiente (1 segundo)
+        setTimeout(() => cliquesTitulo = 0, 1000); 
+    });
+    // ---------------------------------------------
 
     // Função para gerar sons sintéticos
     function playSound(freq, type, duration, vol) {
@@ -194,7 +217,8 @@
         const banidosNoIntervalo = banidos.filter(n => n >= min && n <= max);
         const setUnico = new Set([...sorteados, ...banidosNoIntervalo]);
 
-        if (setUnico.size >= totalNoIntervalo) {
+        // Evita travar se o número forçado ignorar as regras normais de esgotamento
+        if (setUnico.size >= totalNoIntervalo && proximoSorteioForcado === null) {
             alert("Números esgotados!");
             return;
         }
@@ -203,9 +227,18 @@
         display.classList.remove('vitoria');
 
         let numeroFinal;
-        do {
-            numeroFinal = Math.floor(Math.random() * (max - min + 1)) + min;
-        } while (sorteados.includes(numeroFinal) || banidos.includes(numeroFinal));
+        
+        // --- LÓGICA DE INTERCEPTAÇÃO DO SORTEIO ---
+        if (proximoSorteioForcado !== null) {
+            numeroFinal = proximoSorteioForcado;
+            proximoSorteioForcado = null; // Reseta para o próximo sorteio ser aleatório novamente
+        } else {
+            // Sorteio normal e justo
+            do {
+                numeroFinal = Math.floor(Math.random() * (max - min + 1)) + min;
+            } while (sorteados.includes(numeroFinal) || banidos.includes(numeroFinal));
+        }
+        // ------------------------------------------
 
         let duracao = 2000; 
         let intervaloCorrendo = 80; 
@@ -246,6 +279,7 @@
     function resetar() {
         if(confirm("Reiniciar tudo?")) {
             sorteados = [];
+            proximoSorteioForcado = null; // Limpa o truque ao resetar
             document.getElementById('resultado').innerText = '--';
             document.getElementById('resultado').classList.remove('vitoria');
             document.getElementById('lista-sorteados').innerText = '-';
