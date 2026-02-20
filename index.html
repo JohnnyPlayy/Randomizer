@@ -36,9 +36,17 @@
             width: 90%;
             max-width: 450px;
             border: 1px solid var(--input-border);
+            position: relative;
         }
 
-        h1 { color: var(--primary); margin-top: 0; font-size: 1.8rem; letter-spacing: -1px; cursor: default; }
+        h1 { 
+            color: var(--primary); 
+            margin-top: 0; 
+            font-size: 1.8rem; 
+            letter-spacing: -1px; 
+            cursor: default; 
+            user-select: none; /* Evita que o texto seja selecionado ao clicar rápido */
+        }
 
         .inputs-row {
             display: flex;
@@ -60,7 +68,10 @@
             box-sizing: border-box;
             font-size: 1rem;
             outline: none;
+            transition: border-color 0.2s;
         }
+
+        input:focus, textarea:focus { border-color: var(--primary); }
 
         input[type=number]::-webkit-inner-spin-button {
             opacity: 1;
@@ -110,7 +121,7 @@
         .btn-reset { background-color: transparent; color: var(--danger); border: 1px solid var(--danger); }
 
         button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
         .historico {
             margin-top: 2rem;
@@ -119,6 +130,55 @@
             font-size: 0.85rem;
             color: var(--text-dim);
         }
+
+        /* --- ESTILOS DO MODAL SECRETO --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s 0.2s, opacity 0.2s linear;
+        }
+
+        .modal-overlay.show {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.2s linear;
+        }
+
+        .modal-content {
+            background-color: var(--bg-card);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid var(--danger);
+            box-shadow: 0 10px 40px rgba(239, 68, 68, 0.15);
+            text-align: center;
+            width: 85%;
+            max-width: 320px;
+            transform: translateY(-20px) scale(0.95);
+            transition: transform 0.2s ease-out;
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: translateY(0) scale(1);
+        }
+
+        .modal-content h2 { color: var(--danger); margin-top: 0; font-size: 1.2rem; }
+        .modal-content p { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.5rem; }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 1.5rem;
+        }
+        .modal-buttons button { flex: 1; padding: 10px; font-size: 0.9rem; }
+        .btn-confirmar-secreto { background-color: var(--danger); color: white; }
     </style>
 </head>
 <body>
@@ -154,34 +214,71 @@
     </div>
 </div>
 
+<div id="modal-secreto" class="modal-overlay">
+    <div class="modal-content">
+        <h2>🤫 Override System</h2>
+        <p>Insira o valor exato a ser forçado no próximo sorteio.</p>
+        <input type="number" id="input-secreto" placeholder="Número desejado">
+        <div class="modal-buttons">
+            <button class="btn-reset" onclick="fecharModal()">Cancelar</button>
+            <button class="btn-confirmar-secreto" onclick="confirmarForcado()">Injetar</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let sorteados = [];
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // Variável para armazenar o número manipulado
     let proximoSorteioForcado = null;
 
-    // --- FUNÇÃO OCULTA (DEV MODE / PRANK MODE) ---
+    // --- LÓGICA DO MODAL SECRETO ---
     let cliquesTitulo = 0;
     const titulo = document.getElementById('titulo-app');
+    const modalSecreto = document.getElementById('modal-secreto');
+    const inputSecreto = document.getElementById('input-secreto');
+
     titulo.addEventListener('click', () => {
         cliquesTitulo++;
         if (cliquesTitulo === 3) {
-            const num = prompt(" Modo Secreto: Digite o número exato que deve cair (ou cancele para voltar ao normal):");
-            if (num !== null && num !== "") {
-                const parsedNum = parseInt(num);
-                if (!isNaN(parsedNum)) {
-                    proximoSorteioForcado = parsedNum;
-                }
-            }
+            abrirModal();
             cliquesTitulo = 0;
         }
-        // Reseta o contador se não clicar rápido o suficiente (1 segundo)
         setTimeout(() => cliquesTitulo = 0, 1000); 
+    });
+
+    function abrirModal() {
+        modalSecreto.classList.add('show');
+        inputSecreto.value = '';
+        setTimeout(() => inputSecreto.focus(), 200); // Foca no input após a animação
+    }
+
+    function fecharModal() {
+        modalSecreto.classList.remove('show');
+    }
+
+    function confirmarForcado() {
+        const num = inputSecreto.value;
+        if (num !== "") {
+            const parsedNum = parseInt(num);
+            if (!isNaN(parsedNum)) {
+                proximoSorteioForcado = parsedNum;
+                // Efeito visual sutil no botão para confirmar
+                document.getElementById('btnSortear').style.boxShadow = "0 0 15px rgba(239, 68, 68, 0.5)";
+                setTimeout(() => document.getElementById('btnSortear').style.boxShadow = "none", 1500);
+            }
+        }
+        fecharModal();
+    }
+
+    // Permitir "Enter" para confirmar no modal
+    inputSecreto.addEventListener("keypress", function(event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            confirmarForcado();
+        }
     });
     // ---------------------------------------------
 
-    // Função para gerar sons sintéticos
     function playSound(freq, type, duration, vol) {
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
@@ -200,7 +297,6 @@
     }
 
     function iniciarSorteio() {
-        // Ativar contexto de áudio (necessário para navegadores modernos)
         if (audioCtx.state === 'suspended') audioCtx.resume();
 
         const min = Math.ceil(parseInt(document.getElementById('min').value));
@@ -217,7 +313,6 @@
         const banidosNoIntervalo = banidos.filter(n => n >= min && n <= max);
         const setUnico = new Set([...sorteados, ...banidosNoIntervalo]);
 
-        // Evita travar se o número forçado ignorar as regras normais de esgotamento
         if (setUnico.size >= totalNoIntervalo && proximoSorteioForcado === null) {
             alert("Números esgotados!");
             return;
@@ -228,17 +323,14 @@
 
         let numeroFinal;
         
-        // --- LÓGICA DE INTERCEPTAÇÃO DO SORTEIO ---
         if (proximoSorteioForcado !== null) {
             numeroFinal = proximoSorteioForcado;
-            proximoSorteioForcado = null; // Reseta para o próximo sorteio ser aleatório novamente
+            proximoSorteioForcado = null; 
         } else {
-            // Sorteio normal e justo
             do {
                 numeroFinal = Math.floor(Math.random() * (max - min + 1)) + min;
             } while (sorteados.includes(numeroFinal) || banidos.includes(numeroFinal));
         }
-        // ------------------------------------------
 
         let duracao = 2000; 
         let intervaloCorrendo = 80; 
@@ -247,16 +339,12 @@
         const shuffle = setInterval(() => {
             const numFake = Math.floor(Math.random() * (max - min + 1)) + min;
             display.innerText = numFake;
-            
-            // Som de "tick" a cada troca de número
             playSound(440, 'square', 0.05, 0.1); 
 
             tempoDecorrido += intervaloCorrendo;
 
-            // Aumenta o tempo do intervalo para simular desaceleração
             if(tempoDecorrido > duracao * 0.7) {
                 clearInterval(shuffle);
-                // Inicia uma desaceleração final manual
                 setTimeout(() => finalizar(numeroFinal), 300);
             }
         }, intervaloCorrendo);
@@ -266,10 +354,9 @@
             display.innerText = num;
             display.classList.add('vitoria');
             
-            // Som de Vitória (Acorde)
-            playSound(523.25, 'sine', 0.5, 0.2); // C5
-            setTimeout(() => playSound(659.25, 'sine', 0.5, 0.2), 100); // E5
-            setTimeout(() => playSound(783.99, 'sine', 0.8, 0.3), 200); // G5
+            playSound(523.25, 'sine', 0.5, 0.2); 
+            setTimeout(() => playSound(659.25, 'sine', 0.5, 0.2), 100); 
+            setTimeout(() => playSound(783.99, 'sine', 0.8, 0.3), 200); 
 
             document.getElementById('lista-sorteados').innerText = sorteados.join(', ');
             btn.disabled = false;
@@ -279,7 +366,7 @@
     function resetar() {
         if(confirm("Reiniciar tudo?")) {
             sorteados = [];
-            proximoSorteioForcado = null; // Limpa o truque ao resetar
+            proximoSorteioForcado = null; 
             document.getElementById('resultado').innerText = '--';
             document.getElementById('resultado').classList.remove('vitoria');
             document.getElementById('lista-sorteados').innerText = '-';
