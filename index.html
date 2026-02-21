@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sorteador</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         :root {
             --bg-body: #0f172a;
@@ -25,6 +26,7 @@
             align-items: center;
             min-height: 100vh;
             margin: 0;
+            overflow-x: hidden;
         }
 
         .container {
@@ -37,6 +39,7 @@
             max-width: 450px;
             border: 1px solid var(--input-border);
             position: relative;
+            z-index: 10;
         }
 
         h1 { 
@@ -45,7 +48,7 @@
             font-size: 1.8rem; 
             letter-spacing: -1px; 
             cursor: default; 
-            user-select: none; /* Evita que o texto seja selecionado ao clicar rápido */
+            user-select: none;
         }
 
         .inputs-row {
@@ -73,11 +76,18 @@
 
         input:focus, textarea:focus { border-color: var(--primary); }
 
+        /* --- REMOVENDO AS SETINHAS DOS INPUTS DE NÚMERO --- */
+        input[type=number]::-webkit-outer-spin-button,
         input[type=number]::-webkit-inner-spin-button {
-            opacity: 1;
-            filter: hue-rotate(150deg) brightness(1.5);
-            cursor: pointer;
+            -webkit-appearance: none;
+            margin: 0;
         }
+
+        input[type=number] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        /* -------------------------------------------------- */
 
         textarea { height: 50px; margin-bottom: 1.5rem; resize: none; }
 
@@ -119,6 +129,7 @@
 
         .btn-sortear { background-color: var(--primary); color: #0f172a; font-size: 1.1rem; }
         .btn-reset { background-color: transparent; color: var(--danger); border: 1px solid var(--danger); }
+        .btn-cancelar { background-color: transparent; color: var(--text-dim); border: 1px solid var(--input-border); }
 
         button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); }
         button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -131,7 +142,7 @@
             color: var(--text-dim);
         }
 
-        /* --- ESTILOS DO MODAL SECRETO --- */
+        /* --- ESTILOS DOS MODAIS --- */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -156,8 +167,7 @@
             background-color: var(--bg-card);
             padding: 2rem;
             border-radius: 1rem;
-            border: 1px solid var(--danger);
-            box-shadow: 0 10px 40px rgba(239, 68, 68, 0.15);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
             text-align: center;
             width: 85%;
             max-width: 320px;
@@ -169,8 +179,15 @@
             transform: translateY(0) scale(1);
         }
 
-        .modal-content h2 { color: var(--danger); margin-top: 0; font-size: 1.2rem; }
-        .modal-content p { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.5rem; }
+        /* Variação de cores para modais específicos */
+        #modal-secreto .modal-content { border: 1px solid var(--danger); box-shadow: 0 10px 40px rgba(239, 68, 68, 0.15); }
+        #modal-reset .modal-content { border: 1px solid var(--input-border); }
+
+        .modal-content h2 { margin-top: 0; font-size: 1.2rem; }
+        #modal-secreto h2 { color: var(--danger); }
+        #modal-reset h2 { color: var(--text-main); }
+
+        .modal-content p { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.4; }
         
         .modal-buttons {
             display: flex;
@@ -178,7 +195,7 @@
             margin-top: 1.5rem;
         }
         .modal-buttons button { flex: 1; padding: 10px; font-size: 0.9rem; }
-        .btn-confirmar-secreto { background-color: var(--danger); color: white; }
+        .btn-confirmar-danger { background-color: var(--danger); color: white; }
     </style>
 </head>
 <body>
@@ -206,7 +223,7 @@
 
     <div class="buttons">
         <button id="btnSortear" class="btn-sortear" onclick="iniciarSorteio()">SORTEAR</button>
-        <button class="btn-reset" onclick="resetar()">Limpar Histórico</button>
+        <button class="btn-reset" onclick="abrirModalReset()">Limpar Histórico</button>
     </div>
 
     <div class="historico">
@@ -216,12 +233,23 @@
 
 <div id="modal-secreto" class="modal-overlay">
     <div class="modal-content">
-        <h2>🤫 Override System</h2>
+        <h2>Manipulador!</h2>
         <p>Insira o valor exato a ser forçado no próximo sorteio.</p>
         <input type="number" id="input-secreto" placeholder="Número desejado">
         <div class="modal-buttons">
-            <button class="btn-reset" onclick="fecharModal()">Cancelar</button>
-            <button class="btn-confirmar-secreto" onclick="confirmarForcado()">Injetar</button>
+            <button class="btn-cancelar" onclick="fecharModal()">Cancelar</button>
+            <button class="btn-confirmar-danger" onclick="confirmarForcado()">Injetar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-reset" class="modal-overlay">
+    <div class="modal-content">
+        <h2>Limpar Histórico?</h2>
+        <p>Tem certeza que deseja apagar todos os números já sorteados? Esta ação não pode ser desfeita.</p>
+        <div class="modal-buttons">
+            <button class="btn-cancelar" onclick="fecharModalReset()">Cancelar</button>
+            <button class="btn-confirmar-danger" onclick="confirmarReset()">Limpar</button>
         </div>
     </div>
 </div>
@@ -249,7 +277,7 @@
     function abrirModal() {
         modalSecreto.classList.add('show');
         inputSecreto.value = '';
-        setTimeout(() => inputSecreto.focus(), 200); // Foca no input após a animação
+        setTimeout(() => inputSecreto.focus(), 200); 
     }
 
     function fecharModal() {
@@ -262,7 +290,6 @@
             const parsedNum = parseInt(num);
             if (!isNaN(parsedNum)) {
                 proximoSorteioForcado = parsedNum;
-                // Efeito visual sutil no botão para confirmar
                 document.getElementById('btnSortear').style.boxShadow = "0 0 15px rgba(239, 68, 68, 0.5)";
                 setTimeout(() => document.getElementById('btnSortear').style.boxShadow = "none", 1500);
             }
@@ -270,14 +297,58 @@
         fecharModal();
     }
 
-    // Permitir "Enter" para confirmar no modal
     inputSecreto.addEventListener("keypress", function(event) {
         if (event.key === "Enter") {
             event.preventDefault();
             confirmarForcado();
         }
     });
+
+    // --- NOVA LÓGICA DO MODAL DE RESET ---
+    const modalReset = document.getElementById('modal-reset');
+
+    function abrirModalReset() {
+        modalReset.classList.add('show');
+    }
+
+    function fecharModalReset() {
+        modalReset.classList.remove('show');
+    }
+
+    function confirmarReset() {
+        sorteados = [];
+        proximoSorteioForcado = null; 
+        document.getElementById('resultado').innerText = '--';
+        document.getElementById('resultado').classList.remove('vitoria');
+        document.getElementById('lista-sorteados').innerText = '-';
+        fecharModalReset(); // Fecha o modal após limpar
+    }
     // ---------------------------------------------
+
+    // --- FUNÇÃO DE EFEITOS VISUAIS (CONFETE NEON) ---
+    const coresNeon = ['#38bdf8', '#22c55e'];
+
+    function dispararConfeteNeon() {
+        const duration = 3 * 1000; 
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 999, colors: coresNeon };
+
+        function randomInRange(min, max) {
+          return Math.random() * (max - min) + min;
+        }
+
+        const interval = setInterval(function() {
+          const timeLeft = animationEnd - Date.now();
+
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
+
+          const particleCount = 50 * (timeLeft / duration);
+          confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+          confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+        }, 250);
+    }
 
     function playSound(freq, type, duration, vol) {
         const oscillator = audioCtx.createOscillator();
@@ -354,22 +425,14 @@
             display.innerText = num;
             display.classList.add('vitoria');
             
+            dispararConfeteNeon();
+            
             playSound(523.25, 'sine', 0.5, 0.2); 
             setTimeout(() => playSound(659.25, 'sine', 0.5, 0.2), 100); 
             setTimeout(() => playSound(783.99, 'sine', 0.8, 0.3), 200); 
 
             document.getElementById('lista-sorteados').innerText = sorteados.join(', ');
             btn.disabled = false;
-        }
-    }
-
-    function resetar() {
-        if(confirm("Reiniciar tudo?")) {
-            sorteados = [];
-            proximoSorteioForcado = null; 
-            document.getElementById('resultado').innerText = '--';
-            document.getElementById('resultado').classList.remove('vitoria');
-            document.getElementById('lista-sorteados').innerText = '-';
         }
     }
 </script>
